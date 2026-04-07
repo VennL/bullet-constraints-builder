@@ -198,16 +198,19 @@ def build_fm(use_handler=0):
     bpy.ops.rigidbody.object_add()
     ob.rigid_body.use_kinematic_deactivation = 1  # "Triggered"
 
-    # Start not being triggered but able to dissolve constraints by triggers (default)
-    if 1:
-        ob.rigid_body.kinematic = 0  # 0 | "Animated"
-        ob.rigid_body.constraint_dissolve = 1
-        ob.rigid_body.plastic_dissolve = 1
-    # Start being triggered, requires a trigger to activate objects
-    else:
+    # Option for external scripts to set all elements triggered to stop at startup (kinematic = 1).
+    # This is necessary for stop triggers to function correctly when touching predefined objects and to
+    # revent the trigger state from propagating to other parts of the structure via remaining intact constraints.
+    # A global trigger domain is required to activate objects at startup; otherwise, nothing will move.
+    if "bcb_ext_startTriggered" in scene.keys():  
         ob.rigid_body.kinematic = 1  # "Animated"
         ob.rigid_body.constraint_dissolve = 0 
         ob.rigid_body.plastic_dissolve = 0
+    # Default: The elements are not triggered at startup, but constraints can be dissolved by triggers.
+    else:
+        ob.rigid_body.kinematic = 0
+        ob.rigid_body.constraint_dissolve = 1
+        ob.rigid_body.plastic_dissolve = 1
 
     ob.select = 0
     

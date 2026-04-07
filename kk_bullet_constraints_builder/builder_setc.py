@@ -666,7 +666,9 @@ def setConstraintSettings(objs, objsEGrp, emptyObjs, objsID, connectsPair, conne
 
             ### Other settings
             so = bool(elemGrps_elemGrp[EGSidxIter])  # Override solver iterations
-            si = elemGrps_elemGrp[EGSidxIter]        # Solver iterations
+            if so:
+                  si = elemGrps_elemGrp[EGSidxIter]        # Solver iterations
+            else: si = None
             
             ### Check if full update is necessary (optimization)
             if not props.asciiExport and not props.rebarMesh:

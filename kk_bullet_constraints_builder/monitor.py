@@ -1414,7 +1414,7 @@ def monitor_dampingRegion_fm(scene):
     
     ### On start frame backup data
     if "bcb_damps" not in bpy.app.driver_namespace:
-        dampsData = bpy.app.driver_namespace["bcb_damps"] = []    
+        dampsData = bpy.app.driver_namespace["bcb_damps"] = []
 
         for elemGrp in elemGrps:
             qDampReg = elemGrp[EGSidxDmpR]
