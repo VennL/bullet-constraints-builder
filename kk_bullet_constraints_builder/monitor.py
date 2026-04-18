@@ -1023,14 +1023,19 @@ def monitor_initTriggers(scene):
     except: pass
     else:
         print("Triggers text file found and used:")
+        triggerCnt = 0    
         triggersSplit = triggers.split('\n')
         triggers = []
         for trigger in triggersSplit:
             try: trigger = list(eval(trigger))
             except: pass
             else:
-                print(trigger)
+                if triggerCnt < 10:
+                    print(trigger)
+                triggerCnt += 1
                 triggers.append(trigger)
+        if triggerCnt > 10:
+            print("Total trigger pairs: %d" %triggerCnt)
         
         ### Check if names are groups and add objects from found groups
         qGroups = 0
@@ -1075,64 +1080,169 @@ def monitor_initTriggers(scene):
 
 ################################################################################
 
+def _pair_key(a, b):
+    # Symmetric key: ("A", "B") == ("B", "A")
+    return (a, b) if a <= b else (b, a)
+
+########################################
+
+def build_trigger_indexes():
+    ns = bpy.app.driver_namespace
+
+    triggers = ns.get("bcb_triggers", ())
+    connects = ns.get("bcb_monitor", ())
+
+    # frame -> [(objA, objB), ...]
+    triggers_by_frame = {}
+    for trig in triggers:
+        if len(trig) < 3:
+            continue
+        frame = trig[0]
+        a = trig[1]
+        b = trig[2]
+        triggers_by_frame.setdefault(frame, []).append((a, b))
+    ns["bcb_triggers_by_frame"] = triggers_by_frame
+
+    # (objA, objB) -> [connect, connect, ...]
+    connects_by_pair = {}
+    for connect in connects:
+        try:
+            a = connect[0][0].name
+            b = connect[1][0].name
+        except Exception:
+            continue
+        key = _pair_key(a, b)
+        connects_by_pair.setdefault(key, []).append(connect)
+    ns["bcb_connects_by_pair"] = connects_by_pair
+
+########################################
+
+def build_fm_indexes(scene):
+    ns = bpy.app.driver_namespace
+
+    try:
+        ob = scene.objects[asciiExportName]
+    except:
+        print("Error: Fracture Modifier object not found.")
+        return False
+
+    try:
+        md = ob.modifiers["Fracture"]
+    except:
+        print("Error: Fracture Modifier not found.")
+        return False
+
+    # (island1, island2) -> [constraint, constraint, ...]
+    fm_by_pair = {}
+    for const in md.mesh_constraints:
+        try:
+            a = const.island1.name
+            b = const.island2.name
+        except Exception:
+            continue
+        key = _pair_key(a, b)
+        fm_by_pair.setdefault(key, []).append(const)
+
+    ns["bcb_fm_constraints_by_pair"] = fm_by_pair
+    return True
+
+########################################
+
 def monitor_checkForTriggers(scene):
+    if debug:
+        print("Calling checkForTriggers")
 
-    if debug: print("Calling checkForTriggers")
+    ns = bpy.app.driver_namespace
 
-    try: triggers = bpy.app.driver_namespace["bcb_triggers"]
-    except: return
-    connects = bpy.app.driver_namespace["bcb_monitor"]
+    # Build cache if not available
+    if "bcb_triggers_by_frame" not in ns or "bcb_connects_by_pair" not in ns:
+        try:
+            build_trigger_indexes()
+        except:
+            return
 
-    triggerCnt = 0    
-    for trigger in triggers:
-        if trigger[0] == scene.frame_current:
-            objAt = trigger[1]
-            objBt = trigger[2]
-            for connect in connects:
-                objAn = connect[0][0].name
-                objBn = connect[1][0].name
-                if (objAn == objAt and objBn == objBt) or (objAn == objBt and objBn == objAt):
-                    if triggerCnt < 10:
-                        print("Triggered connection: %s, %s" %(objAt, objBt))
-                        triggerCnt += 1
-                    consts = connect[4]
-                    for const in consts:
-                        const.rigid_body_constraint.enabled = 0
-                    connect[12] = 2  # conMode
-    if triggerCnt > 10:
-        print("Triggered further %d connection(s)." %(triggerCnt -10))
-                    
+    triggers_by_frame = ns.get("bcb_triggers_by_frame")
+    connects_by_pair = ns.get("bcb_connects_by_pair")
+    if not triggers_by_frame or not connects_by_pair:
+        return
+
+    frame = scene.frame_current
+    pairs = triggers_by_frame.get(frame)
+    if not pairs:
+        return
+
+    triggerCnt = 0
+
+    for objAt, objBt in pairs:
+        key = _pair_key(objAt, objBt)
+        connect_list = connects_by_pair.get(key)
+        if not connect_list:
+            continue
+
+        for connect in connect_list:
+            if triggerCnt < 3:
+                print("Triggered connection: %s, %s" % (objAt, objBt))
+            triggerCnt += 1
+
+            consts = connect[4]
+            for const in consts:
+                if const.rigid_body_constraint.use_breaking:  # Skip constraint for the Disable Collision Permanently feature
+                    const.rigid_body_constraint.enabled = 0
+                const.rigid_body_constraint.enabled = 0
+            connect[12] = 2  # conMode
+
+    if triggerCnt > 3:
+        print("Triggered %d connection(s)." %triggerCnt)
+
 ################################################################################
 
 def monitor_checkForTriggers_fm(scene):
+    if debug:
+        print("Calling checkForTriggers_fm")
 
-    if debug: print("Calling checkForTriggers_fm")
+    ns = bpy.app.driver_namespace
 
-    try: triggers = bpy.app.driver_namespace["bcb_triggers"]
-    except: return
+    # Build trigger index if needed
+    if "bcb_triggers_by_frame" not in ns:
+        try:
+            build_trigger_indexes()
+        except:
+            return
 
-    # Get Fracture Modifier
-    try: ob = scene.objects[asciiExportName]
-    except: print("Error: Fracture Modifier object expected but not found."); return
-    md = ob.modifiers["Fracture"]
+    # Build FM constraint index if needed
+    if "bcb_fm_constraints_by_pair" not in ns:
+        if not build_fm_indexes(scene):
+            return
 
-    triggerCnt = 0    
-    for trigger in triggers:
-        if trigger[0] == scene.frame_current:
-            objAt = trigger[1]
-            objBt = trigger[2]
-            qPrintOnce = 1
-            for const in md.mesh_constraints:
-                objAn = const.island1.name
-                objBn = const.island2.name
-                if (objAn == objAt and objBn == objBt) or (objAn == objBt and objBn == objAt):
-                    if triggerCnt < 10:
-                        print("Triggered constraint: %s, %s" %(objAt, objBt))
-                        triggerCnt += 1
-                    const.enabled = 0
-                    const.breaking_threshold = 0  # FM will switch to plastic mode if 1st tolerance is exceeded, so we also need to reset BT
-    if triggerCnt > 10:
-        print("Triggered further %d constraint(s)." %(triggerCnt -10))
+    triggers_by_frame = ns.get("bcb_triggers_by_frame")
+    fm_by_pair = ns.get("bcb_fm_constraints_by_pair")
+    if not triggers_by_frame or not fm_by_pair:
+        return
+
+    frame = scene.frame_current
+    pairs = triggers_by_frame.get(frame)
+    if not pairs:
+        return
+
+    triggerCnt = 0
+
+    for objAt, objBt in pairs:
+        key = _pair_key(objAt, objBt)
+        const_list = fm_by_pair.get(key)
+        if not const_list:
+            continue
+
+        for const in const_list:
+            if triggerCnt < 3:
+                print("Triggered constraint: %s, %s" % (objAt, objBt))
+            triggerCnt += 1
+
+            if const.use_breaking:  # Skip constraint for the Disable Collision Permanently feature
+                const.enabled = 0
+                const.breaking_threshold = 0
+
+    if triggerCnt > 3:
+        print("Triggered %d connection(s)." %triggerCnt)
 
 ################################################################################
 

@@ -139,7 +139,7 @@ def tool_runPythonScript(scene, filename=""):
     
 ################################################################################
 
-def createElementGroup(grpName, presetNo=0):
+def createElementGroup(grpName, presetNo=0, presetName=None):
     
     ### Create new element group
     props = bpy.context.window_manager.bcb
@@ -151,6 +151,11 @@ def createElementGroup(grpName, presetNo=0):
             qExists = 1; break
     if not qExists:
         if len(elemGrps) < maxMenuElementGroupItems:
+            # Find preset by name
+            if presetName != None and presetNo == 0:
+                for presetIdx in range(len(presets)):
+                    if presetName == presets[presetIdx][0]:
+                        presetNo = presetIdx
             # Add element group (syncing element group indices happens on execution)
             elemGrps.append(presets[presetNo].copy())
             # Update menu selection
@@ -224,7 +229,7 @@ def tool_createGroupsFromNames(scene):
     ### Create also element groups from data
     for k in range(len(grps)):
         grpName = grps[k]
-        createElementGroup(grpName, presetNo=0)
+        createElementGroup(grpName, presetName=grpName)
     # Update menu related properties from global vars
     props.props_update_menu()
     
@@ -486,9 +491,13 @@ def tool_remesh(scene):
     selection = [obj for obj in selection if obj.select]
     if len(selectionSkip): print("Elements skipped by '%s' group:" %grpName, len(selectionSkip))
 
+    for obj in selection:
+        scene.objects.unlink(obj)   # Unlinking optimization: Unlink objects from scene for speed optimization
+
     count = 0
     for obj in selection:
         sys.stdout.write('\r' +"%d %s... " %(count, obj.name))
+        scene.objects.link(obj)   # Unlinking optimization: Relink objects to scene so we can work with it
         bpy.context.scene.objects.active = obj
         try: bpy.ops.object.mode_set(mode='EDIT')
         except: pass
@@ -498,8 +507,13 @@ def tool_remesh(scene):
         except: pass
         try: bpy.ops.object.mode_set(mode='OBJECT') 
         except: pass
+        scene.objects.unlink(obj)   # Unlinking optimization: Unlink object again
         count += 1
     print('\r                                                                                ')
+
+    # Unlinking optimization: Relink all objects back to scene
+    for obj in selection:
+        scene.objects.link(obj)
     
     # Reselect previously deselected objects
     for obj in selectionSkip: obj.select = 1
