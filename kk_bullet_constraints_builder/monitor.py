@@ -992,21 +992,56 @@ def monitor_countIntactConnections_fm(scene):
 
 ################################################################################
 
+def _pair_key(a, b):
+    # Symmetric key: ("A", "B") == ("B", "A")
+    return (a, b) if a <= b else (b, a)
+
+########################################
+
+def _swap_first_material_slot(obj, from_mat_name, to_mat_name):
+    # Replace the first material slot that matches from_mat_name
+    if obj is None or not from_mat_name or not to_mat_name or from_mat_name == to_mat_name:
+        return False
+
+    new_mat = bpy.data.materials.get(to_mat_name)
+    if new_mat is None:
+        print("Warning: target material '%s' not found." % to_mat_name)
+        return False
+
+    for slot in obj.material_slots:
+        mat = slot.material
+        if mat and mat.name == from_mat_name:
+            slot.material = new_mat
+            return True
+
+    return False
+
+########################################
+
 def monitor_initTriggers(scene):
 
     props = bpy.context.window_manager.bcb
     elemGrps = global_vars.elemGrps
-    ### Get data from scene
-    try: objs = scene["bcb_objs"]
-    except: objs = []; print("Error: bcb_objs property not found, rebuilding constraints is required.")
-    try: objsEGrp = scene["bcb_objsEGrp"]
-    except: objsEGrp = []; print("Error: bcb_objsEGrp property not found, cleanup may be incomplete.")
-    ### Prepare dictionary of element indices for faster item search (optimization)
+
+    # Get data from scene
+    try:
+        objs = scene["bcb_objs"]
+    except:
+        objs = []
+        print("Error: bcb_objs property not found, rebuilding constraints is required.")
+
+    try:
+        objsEGrp = scene["bcb_objsEGrp"]
+    except:
+        objsEGrp = []
+        print("Error: bcb_objsEGrp property not found, cleanup may be incomplete.")
+
+    # Prepare dictionary of element indices for faster item search (optimization)
     objsDict = {}
     for i in range(len(objs)):
         objsDict[objs[i]] = i
-    
-    ### Create group index with their respective objects
+
+    # Create group index with their respective objects
     grpsObjs = {}
     for elemGrp in elemGrps:
         grpName = elemGrp[EGSidxName]
@@ -1017,72 +1052,92 @@ def monitor_initTriggers(scene):
                 if elemGrp == elemGrps[elemGrpIdx]:
                     grpObjs.append(obj)
         grpsObjs[grpName] = grpObjs
-    
-    ### Get trigger data from text file
-    try: triggers = bpy.data.texts[asciiTriggersName +".txt"].as_string()
-    except: pass
+
+    # Get trigger data from text file
+    try:
+        triggers = bpy.data.texts[asciiTriggersName + ".txt"].as_string()
+    except:
+        pass
     else:
         print("Triggers text file found and used:")
-        triggerCnt = 0    
+        triggerCnt = 0
         triggersSplit = triggers.split('\n')
         triggers = []
+
         for trigger in triggersSplit:
-            try: trigger = list(eval(trigger))
-            except: pass
+            try:
+                trigger = list(eval(trigger))
+            except:
+                pass
             else:
                 if triggerCnt < 10:
                     print(trigger)
                 triggerCnt += 1
                 triggers.append(trigger)
+
         if triggerCnt > 10:
-            print("Total trigger pairs: %d" %triggerCnt)
-        
-        ### Check if names are groups and add objects from found groups
+            print("Total trigger pairs: %d" % triggerCnt)
+
+        # Check if names are groups and expand them
         qGroups = 0
         triggersNew = []
+
         for trigger in triggers:
+            hasMaterials = len(trigger) >= 5
+            matFrom = trigger[3] if hasMaterials else None
+            matTo = trigger[4] if hasMaterials else None
+
             if trigger[1] in grpsObjs and trigger[2] in grpsObjs:
                 for objA in grpsObjs[trigger[1]]:
                     for objB in grpsObjs[trigger[2]]:
                         triggerNew = [trigger[0], objA, objB]
+                        if hasMaterials:
+                            triggerNew.extend([matFrom, matTo])
                         triggersNew.append(triggerNew)
                 qGroups = 1
+
             elif trigger[1] in grpsObjs:
                 for objA in grpsObjs[trigger[1]]:
                     triggerNew = [trigger[0], objA, trigger[2]]
+                    if hasMaterials:
+                        triggerNew.extend([matFrom, matTo])
                     triggersNew.append(triggerNew)
                 qGroups = 1
+
             elif trigger[2] in grpsObjs:
                 for objB in grpsObjs[trigger[2]]:
                     triggerNew = [trigger[0], trigger[1], objB]
+                    if hasMaterials:
+                        triggerNew.extend([matFrom, matTo])
                     triggersNew.append(triggerNew)
                 qGroups = 1
+
             else:
                 triggersNew.append(trigger)
+
         if qGroups:
             triggers = triggersNew
-            print("One of more names can be interpreted as group, trigger list will be extended with their members.")
+            print("One or more names can be interpreted as a group; the trigger list will be extended with their members.")
+
         print()
-        
+
         bpy.app.driver_namespace["bcb_triggers"] = triggers
-        
+
         # When Fracture Modifier is in use
         if hasattr(bpy.types.DATA_PT_modifiers, 'FRACTURE') and asciiExportName in scene.objects:
 
-            ### Backup original FM data as it will be modified during simulation
-            try: ob = scene.objects[asciiExportName]
-            except: print("Error: Fracture Modifier object expected but not found."); return
+            # Backup original FM data as it will be modified during simulation
+            try:
+                ob = scene.objects[asciiExportName]
+            except:
+                print("Error: Fracture Modifier object expected but not found.")
+                return
+
             md = ob.modifiers["Fracture"]
-            
+
             connects = bpy.app.driver_namespace["bcb_monitor_fm"] = []
             for const in md.mesh_constraints:
                 connects.append([bool(const.enabled), float(const.breaking_threshold)])
-
-################################################################################
-
-def _pair_key(a, b):
-    # Symmetric key: ("A", "B") == ("B", "A")
-    return (a, b) if a <= b else (b, a)
 
 ########################################
 
@@ -1092,15 +1147,13 @@ def build_trigger_indexes():
     triggers = ns.get("bcb_triggers", ())
     connects = ns.get("bcb_monitor", ())
 
-    # frame -> [(objA, objB), ...]
+    # frame -> [trigger, trigger, ...]
     triggers_by_frame = {}
     for trig in triggers:
         if len(trig) < 3:
             continue
         frame = trig[0]
-        a = trig[1]
-        b = trig[2]
-        triggers_by_frame.setdefault(frame, []).append((a, b))
+        triggers_by_frame.setdefault(frame, []).append(trig)
     ns["bcb_triggers_by_frame"] = triggers_by_frame
 
     # (objA, objB) -> [connect, connect, ...]
@@ -1173,7 +1226,21 @@ def monitor_checkForTriggers(scene):
 
     triggerCnt = 0
 
-    for objAt, objBt in pairs:
+    for trig in pairs:
+        objAt = trig[1]
+        objBt = trig[2]
+
+        # Optional material swap
+        if len(trig) >= 5:
+            matFrom = trig[3]
+            matTo = trig[4]
+
+            objA = scene.objects.get(objAt)
+            objB = scene.objects.get(objBt)
+
+            _swap_first_material_slot(objA, matFrom, matTo)
+            #_swap_first_material_slot(objB, matFrom, matTo)
+
         key = _pair_key(objAt, objBt)
         connect_list = connects_by_pair.get(key)
         if not connect_list:
@@ -1186,13 +1253,14 @@ def monitor_checkForTriggers(scene):
 
             consts = connect[4]
             for const in consts:
-                if const.rigid_body_constraint.use_breaking:  # Skip constraint for the Disable Collision Permanently feature
-                    const.rigid_body_constraint.enabled = 0
-                const.rigid_body_constraint.enabled = 0
+                rb = const.rigid_body_constraint
+                if rb.use_breaking:  # Skip constraint for the Disable Collision Permanently feature
+                    rb.enabled = 0
+
             connect[12] = 2  # conMode
 
     if triggerCnt > 3:
-        print("Triggered %d connection(s)." %triggerCnt)
+        print("Triggered %d connection(s)." % triggerCnt)
 
 ################################################################################
 
@@ -1226,7 +1294,22 @@ def monitor_checkForTriggers_fm(scene):
 
     triggerCnt = 0
 
-    for objAt, objBt in pairs:
+    try:
+        ob = scene.objects[asciiExportName]
+    except:
+        print("Error: Fracture Modifier object expected but not found.")
+        return
+
+    for trig in pairs:
+        objAt = trig[1]
+        objBt = trig[2]
+
+        # Optional material swap on the FM object itself
+        if len(trig) >= 5:
+            matFrom = trig[3]
+            matTo = trig[4]
+            _swap_first_material_slot(ob, matFrom, matTo)
+
         key = _pair_key(objAt, objBt)
         const_list = fm_by_pair.get(key)
         if not const_list:
@@ -1242,7 +1325,7 @@ def monitor_checkForTriggers_fm(scene):
                 const.breaking_threshold = 0
 
     if triggerCnt > 3:
-        print("Triggered %d connection(s)." %triggerCnt)
+        print("Triggered %d connection(s)." % triggerCnt)
 
 ################################################################################
 
