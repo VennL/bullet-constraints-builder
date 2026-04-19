@@ -79,14 +79,14 @@ class bcb_props(bpy.types.PropertyGroup):
     ### Preprocessing Tools
     preprocTools_aut = bool_(default=1, name="Run On Automatic Mode", update=updGlob, description="Enables that preprocessing will be performed on Automatic Mode. To avoid accidental double execution, this will be disabled whenever a preprocessing tool is activated manually, but it can be activated again at any time")
 
-    preprocTools_rps = bool_(default=1)
+    preprocTools_rps = bool_(default=0)
     preprocTools_rps_nam = string_(name="Script File",             default='', update=updGlob, description="Enter the filename of an existing Python script")
 
     preprocTools_grp = bool_(default=1)
     preprocTools_grp_sep = string_(name="Separator",               default=':', update=updGlob, description="Defines a key character or string to derive the group names from the object names in the scene. Example: An object name 'Columns:B4' with separator ':' will generate a group named 'Columns' containing all objects with this phrase in their names")
     preprocTools_grp_occ = bool_(name="First Occurrence",          default=1, update=updGlob, description="Enables first occurrence search of the separator within an element name for cases when there are more than one separator included, if disabled the last occurrence is used")
 
-    preprocTools_sep = bool_(default=1)
+    preprocTools_sep = bool_(default=0)
 
     preprocTools_mod = bool_(default=1)
 
@@ -100,7 +100,7 @@ class bcb_props(bpy.types.PropertyGroup):
     preprocTools_dis_siz = float_(name="Minimum Size Limit",       default=2.9, min=0.0, max=1000, update=updGlob, description="Discretization size in m this tool tries to reach by discretization. To enforce regularity at all times, elements afterwards can deviate in size to some extent from the target size. For booleans (default method): The minimum dimension value serves as limit for an element still being considered for subdivision, at least two dimension axis must be above this size. After discretization no element will be larger than this value anymore, although they can be smaller up to 50%")
     preprocTools_dis_cel = bool_(name="Use Voxel Method (Faster)", default=0, update=updGlob, description="Enables the voxel based discretizaton method and geometry is converted into cuboid-shaped cells. While this method has the disadvantage that it can't keep mesh details such as curved surfaces, round columns or mural reliefs, it is very fast compared to the default boolean based method. Also note that this method is limited to odd subdivision level numbers [1,3,5,7..], so you basically can't split an element into two for instance but only into three, five and so on")
     preprocTools_dis_bis = bool_(name="Use Bisect Method (Fastest)", default=0, update=updGlob, description="Enables the bisect based discretizaton method. While this method has the disadvantage that filling holes can fail on more complex shapes, it is extremely fast compared to the default boolean based method and is more robust on non-manifold geometry")
-    preprocTools_dis_jus = bool_(name="Enable Junction Search",    default=1, update=updGlob, description="Tries to split cornered walls at the corner rather than splitting based on object space to generate more clean shapes")
+    preprocTools_dis_jus = bool_(name="Enable Junction Search",    default=0, update=updGlob, description="Tries to split cornered walls at the corner rather than splitting based on object space to generate more clean shapes")
 
     preprocTools_mod2 = bool_(default=0)
 
@@ -131,6 +131,9 @@ class bcb_props(bpy.types.PropertyGroup):
     preprocTools_gnd_ndu = float_(name="Duration",                 default=10, min=0.0, max=1000, update=updGlob, description="Duration of the artificial earthquake to be generated in seconds")
     preprocTools_gnd_nsd = float_(name="Random Seed",              default=0, min=0.0, max=10000000, update=updGlob, description="Seed number for the random noise function used to generate the artificial earthquake, modification will change the characteristics of the motion")
     preprocTools_gnd_nam = string_(name="CSV File",                default='', update=updGlob, description="Enter filename or search for earthquake time history file as plain ASCII text with comma-separated values (.csv). File structure: 4 columns: t [s], X [m/s²], Y [m/s²], Z [m/s²]. Lines starting with '#' are skipped")
+
+    preprocTools_rps2 = bool_(default=0)
+    preprocTools_rps2_nam = string_(name="Script File",             default='', update=updGlob, description="Enter the filename of an existing Python script")
 
     ### Postprocessing Tools
     postprocTools_aut = bool_(default=0, name="Run On Automatic Mode", update=updGlob, description="Enables that postprocessing will be performed on Automatic Mode. To avoid accidental double execution, this will be disabled whenever a postprocessing tool is activated manually, but it can be activated again at any time")

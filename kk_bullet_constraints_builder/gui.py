@@ -309,6 +309,15 @@ class bcb_panel_preprocessing_tools(bpy.types.Panel):
         split.prop(props, "preprocTools_gnd_nam")
         split.operator("bcb.tool_select_csv_file", icon="FILESEL", text="").opNo = 1
         if props.preprocTools_gnd_nac: split.enabled = 0
+
+        row = col.row(align=1); split = row.split(percentage=.06, align=0)
+        split.prop(props, "preprocTools_rps2", text="")
+        box = split.box()
+        box.operator("bcb.preproc_tool_run_python_script", icon="DOT")
+        row = box.row(align=1)
+        split = row.split(percentage=.85, align=1)
+        split.prop(props, "preprocTools_rps2_nam")
+        split.operator("bcb.tool_select_py_file", icon="FILESEL", text="").opNo = 1
         
 ########################################
 

@@ -604,6 +604,7 @@ class OBJECT_OT_bcb_preprocess_do_all_steps_at_once(bpy.types.Operator):
         if props.preprocTools_int: tool_removeIntersections(scene); props.preprocTools_int = 0
         if props.preprocTools_fix: tool_fixFoundation(scene); props.preprocTools_fix = 0
         if props.preprocTools_gnd: tool_groundMotion(scene); props.preprocTools_gnd = 0
+        if props.preprocTools_rps2: tool_runPythonScript(scene, props.preprocTools_rps2_nam); props.preprocTools_rps2 = 0
         props.preprocTools_aut = 0
         if not props.automaticMode and not props.preprocTools_int_bol:
             ### Check for intersections and warn if some are left
@@ -632,6 +633,19 @@ class OBJECT_OT_bcb_preproc_tool_run_python_script(bpy.types.Operator):
         scene = bpy.context.scene
         tool_runPythonScript(scene, props.preprocTools_rps_nam)
         props.preprocTools_rps = 0
+        return{'FINISHED'}
+
+########################################
+
+class OBJECT_OT_bcb_preproc_tool_run_python_script_2(bpy.types.Operator):
+    bl_idname = "bcb.preproc_tool_run_python_script_2"
+    bl_label = "Run Python Script"
+    bl_description = "Executes a user-defined Python script for customizable automatization purposes (e.g. for scene management and modification)"
+    def execute(self, context):
+        props = context.window_manager.bcb
+        scene = bpy.context.scene
+        tool_runPythonScript(scene, props.preprocTools_rps2_nam)
+        props.preprocTools_rps2 = 0
         return{'FINISHED'}
 
 ########################################

@@ -103,6 +103,9 @@ def storeConfigDataInScene(scene):
     scene["bcb_prop_preprocTools_gnd_nsd"] = props.preprocTools_gnd_nsd
     scene["bcb_prop_preprocTools_gnd_nam"] = props.preprocTools_gnd_nam
 
+    scene["bcb_prop_preprocTools_rps2"] = props.preprocTools_rps2
+    scene["bcb_prop_preprocTools_rps2_nam"] = props.preprocTools_rps2_nam
+
     ### Postprocessing Tools
     scene["bcb_prop_postprocTools_aut"] = props.postprocTools_aut
 
@@ -297,6 +300,11 @@ def getConfigDataFromScene(scene):
         props.preprocTools_gnd_nsd = scene["bcb_prop_preprocTools_gnd_nsd"]
     if "bcb_prop_preprocTools_gnd_nam" in scene.keys():
         props.preprocTools_gnd_nam = scene["bcb_prop_preprocTools_gnd_nam"]
+
+    if "bcb_prop_preprocTools_rps2" in scene.keys():
+        props.preprocTools_rps2 = scene["bcb_prop_preprocTools_rps2"]
+    if "bcb_prop_preprocTools_rps2_nam" in scene.keys():
+        props.preprocTools_rps2_nam = scene["bcb_prop_preprocTools_rps2_nam"]
 
     ### Postprocessing Tools
 

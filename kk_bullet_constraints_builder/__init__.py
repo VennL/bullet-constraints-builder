@@ -241,6 +241,7 @@ classes = [ \
     OBJECT_OT_bcb_preproc_tool_fix_foundation,
     OBJECT_OT_bcb_preproc_tool_ground_motion,
     OBJECT_OT_bcb_tool_select_csv_file,
+    OBJECT_OT_bcb_preproc_tool_run_python_script_2,
 
     OBJECT_OT_bcb_postprocess_do_all_steps_at_once,
     OBJECT_OT_bcb_postproc_tool_export_location_history,
