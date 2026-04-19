@@ -992,6 +992,44 @@ def monitor_countIntactConnections_fm(scene):
 
 ################################################################################
 
+def _backup_material_slots(scene, obj_name):
+    ns = bpy.app.driver_namespace
+    backups = ns.setdefault("bcb_origMaterials", {})
+
+    if obj_name in backups:
+        return
+
+    obj = scene.objects.get(obj_name)
+    if obj is None:
+        return
+
+    backups[obj_name] = [slot.material.name if slot.material else None for slot in obj.material_slots]
+
+########################################
+
+def _restore_material_slots(scene):
+    ns = bpy.app.driver_namespace
+    backups = ns.get("bcb_origMaterials")
+    if not backups:
+        return
+
+    for obj_name, mat_names in backups.items():
+        obj = scene.objects.get(obj_name)
+        if obj is None:
+            continue
+
+        slot_count = min(len(obj.material_slots), len(mat_names))
+        for i in range(slot_count):
+            mat_name = mat_names[i]
+            obj.material_slots[i].material = bpy.data.materials.get(mat_name) if mat_name else None
+
+    try:
+        del ns["bcb_origMaterials"]
+    except:
+        pass
+    
+########################################
+    
 def _pair_key(a, b):
     # Symmetric key: ("A", "B") == ("B", "A")
     return (a, b) if a <= b else (b, a)
@@ -1139,6 +1177,20 @@ def monitor_initTriggers(scene):
             for const in md.mesh_constraints:
                 connects.append([bool(const.enabled), float(const.breaking_threshold)])
 
+        # Backup original materials for all objects that may be modified by triggers
+        materialBackupObjs = set()
+        for trigger in triggers:
+            if len(trigger) >= 5:
+                materialBackupObjs.add(trigger[1])
+
+        if len(materialBackupObjs):
+            for objName in materialBackupObjs:
+                _backup_material_slots(scene, objName)
+
+            # Also backup the FM object if it may receive material swaps
+            if hasattr(bpy.types.DATA_PT_modifiers, 'FRACTURE') and asciiExportName in scene.objects:
+                _backup_material_slots(scene, asciiExportName)
+                
 ########################################
 
 def build_trigger_indexes():
@@ -1230,14 +1282,11 @@ def monitor_checkForTriggers(scene):
         objAt = trig[1]
         objBt = trig[2]
 
-        # Optional material swap
+        # Optional material swap on the first object only
         if len(trig) >= 5:
             matFrom = trig[3]
             matTo = trig[4]
-
             objA = scene.objects.get(objAt)
-            objB = scene.objects.get(objBt)
-
             _swap_first_material_slot(objA, matFrom, matTo)
 
         key = _pair_key(objAt, objBt)
@@ -1972,9 +2021,9 @@ def monitor_freeBuffers_both(scene):
         # Clear trigger properties
         try: del bpy.app.driver_namespace["bcb_triggers"]
         except: pass
+        # Restore original materials
+        _restore_material_slots(scene)
 
         # Clear vertex location properties
         try: del bpy.app.driver_namespace["bcb_vLocs"]
         except: pass
-    
-    
