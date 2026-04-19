@@ -602,14 +602,10 @@ def tool_discretize(scene):
     objsVox = []
 
     for obj in selection:
-        if obj_in_group(obj, grpBool):
-            objsBool.append(obj)
-        elif obj_in_group(obj, grpBis):
-            objsBis.append(obj)
-        elif obj_in_group(obj, grpVox):
-            objsVox.append(obj)
-        else:
-            objsDefault.append(obj)
+        if obj_in_group(obj, grpBool):  objsBool.append(obj)
+        elif obj_in_group(obj, grpBis): objsBis.append(obj)
+        elif obj_in_group(obj, grpVox): objsVox.append(obj)
+        else:                           objsDefault.append(obj)
 
     # Find mesh objects in selection
     objs = [obj for obj in selection if obj.type == 'MESH' and not obj.hide and obj.is_visible(bpy.context.scene) and len(obj.data.vertices) > 0]
@@ -752,6 +748,7 @@ def tool_discretize(scene):
             if not use_bis: kk_mesh_fracture.run(scene, 'BCB', ['HALVING', props.preprocTools_dis_siz, 1, 'BCB_CuttingPlane'], None)
             else:           kk_mesh_fracture_bisect.run(scene, 'BCB', ['HALVING', props.preprocTools_dis_siz, 1, 'BCB_CuttingPlane'], None)
             ### Add new objects to the object list and remove deleted ones
+            updateObjList(scene, selectionBak)
             updateObjList(scene, selection)
             updateObjList(scene, objs)
 
@@ -854,6 +851,7 @@ def tool_discretize(scene):
                     if not use_bis: kk_mesh_fracture.run(scene, 'BCB', ['HALVING', props.preprocTools_dis_siz, 1, 'BCB_CuttingPlane'], None)
                     else:           kk_mesh_fracture_bisect.run(scene, 'BCB', ['HALVING', props.preprocTools_dis_siz, 1, 'BCB_CuttingPlane'], None)
                     ### Add new objects to the object list and remove deleted ones
+                    updateObjList(scene, selectionBak)
                     updateObjList(scene, selection)
                     updateObjList(scene, objs)
 
@@ -879,11 +877,13 @@ def tool_discretize(scene):
                 ###### External function
                 kk_mesh_separate_less_loose.run('BCB', [props.preprocTools_dis_siz])
                 ### Add new objects to the object list and remove deleted ones
+                updateObjList(scene, selectionBak)
                 updateObjList(scene, selection)
 
         ###### Clean-up for junction splitting and boolean halving
         if use_cel and props.preprocTools_dis_jus:
             ### Add new objects to the object list and remove deleted ones
+            updateObjList(scene, selectionBak)
             updateObjList(scene, selection)
 
         if not use_cel or props.preprocTools_dis_jus:
@@ -893,7 +893,6 @@ def tool_discretize(scene):
                 bpy.data.objects.remove(objC, do_unlink=1)
 
         # Revert to start selection for this batch
-        bpy.ops.object.select_all(action='DESELECT')
         for obj in selection: obj.select = 1
         bpy.context.scene.objects.active = selectionActive
 
@@ -903,13 +902,9 @@ def tool_discretize(scene):
     run_batch(objsBis, True, False)
     run_batch(objsVox, False, True)
 
-    # Reselect previously deselected objects
-    for obj in selectionSkip: obj.select = 1
-
-    # Revert empties and constrained objects to start selection
-    for obj in emptyObjs: obj.select = 1
-    for obj in objsConst: obj.select = 1
-
+    # Revert to start selection including all new objects
+    for obj in selectionBak: obj.select = 1
+            
     # Set object centers to geometry origin
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
     

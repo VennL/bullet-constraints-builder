@@ -1239,7 +1239,6 @@ def monitor_checkForTriggers(scene):
             objB = scene.objects.get(objBt)
 
             _swap_first_material_slot(objA, matFrom, matTo)
-            #_swap_first_material_slot(objB, matFrom, matTo)
 
         key = _pair_key(objAt, objBt)
         connect_list = connects_by_pair.get(key)
