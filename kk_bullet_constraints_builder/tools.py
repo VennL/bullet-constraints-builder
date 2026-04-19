@@ -116,26 +116,42 @@ def tool_selectGroup(scene):
 
 def tool_runPythonScript(scene, filename=""):
 
-    print("\nExecuting user-defined Python script...")
+	print("\nExecuting user-defined Python script...")
 
-    if len(filename) == 0: print("No script defined."); return
+	if len(filename) == 0:
+		print("No script defined.")
+		return
 
-    # First try to get an internal text file, if not successful try again with external file
-    f = None
-    try: s = bpy.data.texts[filename].as_string()
-    except:
-        try: f = open(filename)
-        except: print("Script not found."); return
-        else: s = f.read()
+	f = None
+	try:
+		s = bpy.data.texts[filename].as_string()
+	except:
+		try:
+			f = open(filename)
+		except:
+			print("Script not found.")
+			return
+		else:
+			s = f.read()
 
-    # Leave edit mode to make sure next operator works in object mode
-    try: bpy.ops.object.mode_set(mode='OBJECT') 
-    except: pass
+	try:
+		bpy.ops.object.mode_set(mode='OBJECT')
+	except:
+		pass
 
-    exec(s)
-    if f != None: f.close()
-    
-    print("User-defined Python script finished and returned to BCB.")
+	ns = {
+		"__name__": "__main__",
+		"__file__": filename,
+		"bpy": bpy,
+		"scene": scene,
+	}
+
+	exec(compile(s, filename, "exec"), ns, ns)
+
+	if f is not None:
+		f.close()
+
+	print("User-defined Python script finished and returned to BCB.")
     
 ################################################################################
 
