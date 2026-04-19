@@ -507,11 +507,19 @@ def tool_remesh(scene):
     selection = [obj for obj in selection if obj.select]
     if len(selectionSkip): print("Elements skipped by '%s' group:" %grpName, len(selectionSkip))
 
-    for obj in selection:
+    # Find mesh objects in selection
+    objs = [obj for obj in selection if obj.type == 'MESH' and not obj.hide and obj.is_visible(bpy.context.scene) and len(obj.data.vertices) > 0]
+    if len(objs) == 0:
+        print("No mesh objects selected.")
+        # Revert to start selection
+        for obj in selectionBak: obj.select = 1
+        return
+
+    for obj in objs:
         scene.objects.unlink(obj)   # Unlinking optimization: Unlink objects from scene for speed optimization
 
     count = 0
-    for obj in selection:
+    for obj in objs:
         sys.stdout.write('\r' +"%d %s... " %(count, obj.name))
         scene.objects.link(obj)   # Unlinking optimization: Relink objects to scene so we can work with it
         bpy.context.scene.objects.active = obj
@@ -528,11 +536,11 @@ def tool_remesh(scene):
     print('\r                                                                                ')
 
     # Unlinking optimization: Relink all objects back to scene
-    for obj in selection:
+    for obj in objs:
         scene.objects.link(obj)
     
-    # Reselect previously deselected objects
-    for obj in selectionSkip: obj.select = 1
+    # Revert to start selection
+    for obj in selectionBak: obj.select = 1
 
 ################################################################################
 
