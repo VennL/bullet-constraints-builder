@@ -1390,7 +1390,10 @@ def tool_groundMotion(scene):
     selection = [obj for obj in selection if obj.select]
     if len(selectionSkip): print("Elements skipped by '%s' group:" %grpName, len(selectionSkip))
 
-    if qCreateGroundObj:
+    # If everything selected was skipped, do not create a new ground object
+    qAllSelectedSkipped = (len(selection) == 0 and len(selectionSkip) > 0)
+
+    if qCreateGroundObj and not qAllSelectedSkipped:
         print("Ground object not found, creating new one...")
         # Find active mesh objects in selection
         objsA = [obj for obj in selection if obj.type == 'MESH' and not obj.hide and obj.is_visible(bpy.context.scene) and obj.rigid_body != None and obj.rigid_body.type == 'ACTIVE' and len(obj.data.vertices) > 0]
@@ -1436,6 +1439,10 @@ def tool_groundMotion(scene):
         # Set ground to the height of the lowest active rigid body
         objGnd.location[2] = height
 
+    elif qCreateGroundObj and qAllSelectedSkipped:
+        print("All selected objects are part of '%s' -> no ground object will be created." % grpName)
+        objGnd = None
+
     ###### Parenting to ground object
     
     # Deselect all objects.
@@ -1454,130 +1461,133 @@ def tool_groundMotion(scene):
                 if obj.type == 'MESH' and not obj.hide and obj.is_visible(bpy.context.scene) and obj.rigid_body != None and obj.rigid_body.type == 'PASSIVE' and len(obj.data.vertices) > 0:
                     objs.append(obj)
 
-    if len(objs) == 0:
-        print("No passive rigid body elements selected, nothing attached to the ground.")
-    else:
-        # Select passive mesh objects
-        for obj in objs: obj.select = 1
+    if objGnd != None:
+        if len(objs) == 0:
+            print("No passive rigid body elements selected, nothing attached to the ground.")
+        else:
+            # Select passive mesh objects
+            for obj in objs: obj.select = 1
 
-        ### Make object parent for selected objects
-        bpy.context.scene.objects.active = objGnd  # Parent
-        bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+            ### Make object parent for selected objects
+            bpy.context.scene.objects.active = objGnd  # Parent
+            bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+            
+            # Enable animated flag for all passive rigid bodies so that Bullet takes their motion into account
+            for obj in objs: obj.rigid_body.kinematic = True
+
+        if objGnd.is_visible(bpy.context.scene):
+
+            # Apply rigid body settings to ground object
+            if objGnd.rigid_body == None:
+                # Deselect all objects.
+                bpy.ops.object.select_all(action='DESELECT')
+                # Apply rigid body settings
+                objGnd.select = 1
+                bpy.context.scene.objects.active = objGnd
+                bpy.ops.rigidbody.objects_add()
+                objGnd.select = 0
+                # Set friction for all to 1.0
+                objGnd.rigid_body.friction = 1
+
+            objGnd.rigid_body.type = 'PASSIVE'
         
-        # Enable animated flag for all passive rigid bodies so that Bullet takes their motion into account
-        for obj in objs: obj.rigid_body.kinematic = True
+            # Enable animated flag for passive rigid bodies so that Bullet takes its motion into account
+            objGnd.rigid_body.kinematic = True
+                    
+        ###### Parenting ground object to motion object
 
-    if objGnd.is_visible(bpy.context.scene):
-
-        # Apply rigid body settings to ground object
-        if objGnd.rigid_body == None:
+        if objMot != None:
             # Deselect all objects.
             bpy.ops.object.select_all(action='DESELECT')
-            # Apply rigid body settings
-            objGnd.select = 1
-            bpy.context.scene.objects.active = objGnd
-            bpy.ops.rigidbody.objects_add()
+            
+            ### Make object parent for selected objects
+            objGnd.select = 1  # Child
+            bpy.context.scene.objects.active = objMot  # Parent
+            bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
             objGnd.select = 0
-            # Set friction for all to 1.0
-            objGnd.rigid_body.friction = 1
+            
+            # Use given motion object for creating artificial earthquake motion from now on
+            objGnd = objMot
 
-        objGnd.rigid_body.type = 'PASSIVE'
-    
-        # Enable animated flag for passive rigid bodies so that Bullet takes its motion into account
-        objGnd.rigid_body.kinematic = True
-                
-    ###### Parenting ground object to motion object
+        ###### Creating artificial earthquake motion curves for ground object
 
-    if objMot != None:
-        # Deselect all objects.
-        bpy.ops.object.select_all(action='DESELECT')
+        if props.preprocTools_gnd_nac:
+            
+            ### Create animation curve with one keyframe as base
+            obj = objGnd
+            obj.animation_data_create()
+            # If current action is already a "Motion" one then output a hint
+            if obj.animation_data.action != None and "Motion" in obj.animation_data.action.name:
+                print("There is already a Motion action, creating a new one...")
+            obj.animation_data.action = bpy.data.actions.new(name="Motion")
+            curveLocX = obj.animation_data.action.fcurves.new(data_path="delta_location", index=0)  
+            curveLocY = obj.animation_data.action.fcurves.new(data_path="delta_location", index=1)  
+            curveLocZ = obj.animation_data.action.fcurves.new(data_path="delta_location", index=2)  
+            curveLocX.keyframe_points.add(1)
+            curveLocY.keyframe_points.add(1)
+            curveLocZ.keyframe_points.add(1)
+
+            ### Creating noise function modifier
+            fps_rate = scene.render.fps
+            amplitude = props.preprocTools_gnd_nap
+            frequency = props.preprocTools_gnd_nfq
+            duration = props.preprocTools_gnd_ndu
+            seed = props.preprocTools_gnd_nsd
+            
+            # X axis
+            fmod = curveLocX.modifiers.new(type='NOISE')
+            fmod.scale = fps_rate /frequency
+            fmod.phase = seed
+            fmod.strength = amplitude *6
+            fmod.depth = 1
+            fmod.use_restricted_range = True
+            fmod.frame_start = 1
+            fmod.frame_end = duration *fps_rate
+            fmod.blend_in = (duration *fps_rate) /2
+            fmod.blend_out = (duration *fps_rate) /2
+
+            # Y axis
+            fmod = curveLocY.modifiers.new(type='NOISE')
+            fmod.scale = fps_rate /frequency
+            fmod.phase = seed +1000
+            fmod.strength = amplitude *6
+            fmod.depth = 1
+            fmod.use_restricted_range = True
+            fmod.frame_start = 1
+            fmod.frame_end = duration *fps_rate
+            fmod.blend_in = (duration *fps_rate) /2
+            fmod.blend_out = (duration *fps_rate) /2
+
+            # Z axis
+#            fmod = curveLocZ.modifiers.new(type='NOISE')
+#            fmod.scale = fps_rate /frequency
+#            fmod.phase = seed +2000
+#            fmod.strength = amplitude *1.5
+#            fmod.depth = 1
+#            fmod.use_restricted_range = True
+#            fmod.frame_start = 1
+#            fmod.frame_end = duration *fps_rate
+#            fmod.blend_in = (duration *fps_rate) /2
+#            fmod.blend_out = (duration *fps_rate) /2
+
+        ######  Import ground motion from text file
+
+        elif len(props.preprocTools_gnd_nam) > 0:
         
-        ### Make object parent for selected objects
-        objGnd.select = 1  # Child
-        bpy.context.scene.objects.active = objMot  # Parent
-        bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
-        objGnd.select = 0
+            # Select ground object as expected by the script
+            bpy.context.scene.objects.active = objGnd
+            objGnd.select = 1
+            # Set frame rate as expected by the script
+            scene.render.fps = 25
         
-        # Use given motion object for creating artificial earthquake motion from now on
-        objGnd = objMot
+            ###### External function
+            kk_import_motion_from_text_file.importData(props.preprocTools_gnd_nam)
 
-    ###### Creating artificial earthquake motion curves for ground object
+            objGnd.select = 0
+            
+        else: print("No text file defined.");
 
-    if props.preprocTools_gnd_nac:
-        
-        ### Create animation curve with one keyframe as base
-        obj = objGnd
-        obj.animation_data_create()
-        # If current action is already a "Motion" one then output a hint
-        if obj.animation_data.action != None and "Motion" in obj.animation_data.action.name:
-            print("There is already a Motion action, creating a new one...")
-        obj.animation_data.action = bpy.data.actions.new(name="Motion")
-        curveLocX = obj.animation_data.action.fcurves.new(data_path="delta_location", index=0)  
-        curveLocY = obj.animation_data.action.fcurves.new(data_path="delta_location", index=1)  
-        curveLocZ = obj.animation_data.action.fcurves.new(data_path="delta_location", index=2)  
-        curveLocX.keyframe_points.add(1)
-        curveLocY.keyframe_points.add(1)
-        curveLocZ.keyframe_points.add(1)
-
-        ### Creating noise function modifier
-        fps_rate = scene.render.fps
-        amplitude = props.preprocTools_gnd_nap
-        frequency = props.preprocTools_gnd_nfq
-        duration = props.preprocTools_gnd_ndu
-        seed = props.preprocTools_gnd_nsd
-        
-        # X axis
-        fmod = curveLocX.modifiers.new(type='NOISE')
-        fmod.scale = fps_rate /frequency
-        fmod.phase = seed
-        fmod.strength = amplitude *6
-        fmod.depth = 1
-        fmod.use_restricted_range = True
-        fmod.frame_start = 1
-        fmod.frame_end = duration *fps_rate
-        fmod.blend_in = (duration *fps_rate) /2
-        fmod.blend_out = (duration *fps_rate) /2
-
-        # Y axis
-        fmod = curveLocY.modifiers.new(type='NOISE')
-        fmod.scale = fps_rate /frequency
-        fmod.phase = seed +1000
-        fmod.strength = amplitude *6
-        fmod.depth = 1
-        fmod.use_restricted_range = True
-        fmod.frame_start = 1
-        fmod.frame_end = duration *fps_rate
-        fmod.blend_in = (duration *fps_rate) /2
-        fmod.blend_out = (duration *fps_rate) /2
-
-        # Z axis
-#        fmod = curveLocZ.modifiers.new(type='NOISE')
-#        fmod.scale = fps_rate /frequency
-#        fmod.phase = seed +2000
-#        fmod.strength = amplitude *1.5
-#        fmod.depth = 1
-#        fmod.use_restricted_range = True
-#        fmod.frame_start = 1
-#        fmod.frame_end = duration *fps_rate
-#        fmod.blend_in = (duration *fps_rate) /2
-#        fmod.blend_out = (duration *fps_rate) /2
-
-    ######  Import ground motion from text file
-
-    elif len(props.preprocTools_gnd_nam) > 0:
-    
-        # Select ground object as expected by the script
-        bpy.context.scene.objects.active = objGnd
-        objGnd.select = 1
-        # Set frame rate as expected by the script
-        scene.render.fps = 25
-    
-        ###### External function
-        kk_import_motion_from_text_file.importData(props.preprocTools_gnd_nam)
-
-        objGnd.select = 0
-        
-    else: print("No text file defined.");
+    else: print("Ground object unavailable, skipping parenting and motion setup.")
 
     # Deselect all objects.
     bpy.ops.object.select_all(action='DESELECT')
