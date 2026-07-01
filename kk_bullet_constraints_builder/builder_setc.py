@@ -241,6 +241,7 @@ def setConstraintSettings(objs, objsEGrp, emptyObjs, objsID, connectsPair, conne
             
             ### Calculate breaking threshold multiplier from explosion gradient of detonator object (-1 = center .. 1 = boundary, clamped to [0..1])
             damageMul = 1
+            worldPos = Vector(loc)
             for detonatorObj in detonatorObjs:
                 if detonatorObj.scale[0] > 0 and detonatorObj.scale[1] > 0 and detonatorObj.scale[2] > 0:
                     if objA not in objsDetonSkip or objB not in objsDetonSkip:
@@ -252,19 +253,17 @@ def setConstraintSettings(objs, objsEGrp, emptyObjs, objsID, connectsPair, conne
                               detonatorMul = detonatorObj["detonMultiplier"]
                         if "detonMaximum" in detonatorObj.keys():
                               detonatorMax = detonatorObj["detonMaximum"]
+                        # Transform the world-space point into the detonator's local space
+                        # -> rotation and scale of the empty now affect the field
+                        localPos = detonatorObj.matrix_world.inverted() * worldPos
                         # Calculate distance to connection
                         distVec = Vector(loc) -detonatorObj.location
                         if detonatorObj.type == 'EMPTY' and detonatorObj.empty_draw_type == 'CUBE':
-                            # When empty is in Cube mode then use a cubic shape
-                            dist =           abs(distVec[0]) /abs(detonatorObj.scale[0])
-                            dist = max(dist, abs(distVec[1]) /abs(detonatorObj.scale[1]))
-                            dist = max(dist, abs(distVec[2]) /abs(detonatorObj.scale[2]))
+                            # When empty is in Cube mode then use cube falloff in local space
+                            dist = max(abs(localPos.x), abs(localPos.y), abs(localPos.z))
                         else:
-                            # Otherwise prefer spherical shape
-                            dist =  (abs(distVec[0]) /abs(detonatorObj.scale[0]))**2
-                            dist += (abs(distVec[1]) /abs(detonatorObj.scale[1]))**2
-                            dist += (abs(distVec[2]) /abs(detonatorObj.scale[2]))**2
-                            dist = dist**.5
+                            # Otherwise prefer spherical falloff in local space
+                            dist = localPos.length
                         damageMul *= min(1, max(1 -detonatorMax, (dist -1) *2 *detonatorMul +1))
                     else: damageMul = 1
             if damageMul < 1:
