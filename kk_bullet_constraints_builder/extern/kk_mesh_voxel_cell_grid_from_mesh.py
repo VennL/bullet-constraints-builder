@@ -226,7 +226,10 @@ def run(source=None, parameters=None):
                             cc[2] = fidz * cellSizeZ
                             if not qFillVolume and (fidx, fidy, fidz) in f_cells: continue  # cell already populated -> no further processing needed for hollow model
                             vs = [vert.co -cc for vert in verts]
-                            if not (-r0 <= a0 * vs[0] <= r0): continue  # cell not intersecting face hyperplane
+
+                            eps = 1e-7  # Numerical tolerance to compensate floating-point precision differences between Blender versions
+                            d = a0.dot(vs[0])
+                            if abs(d) > r0 + eps: continue  # cell not intersecting face hyperplane
 
                             ### check overlap of cell with face (separating axis theorem)
                             fs = [vs[1] -vs[0], vs[2] -vs[1], vs[0] -vs[2]]
@@ -499,11 +502,6 @@ def run(source=None, parameters=None):
                     objN.dimensions = obj.dimensions
                 objsN.append(objN)
 
-        # Delete object from database
-        if qRemoveOriginal:
-            bpy.data.meshes.remove(obj.data, do_unlink=1)
-            bpy.data.objects.remove(obj, do_unlink=1)
-
     if qSilentVerbose: print()
         
     ### Mesh building for global cell array if non-manifold mesh is enabled
@@ -657,12 +655,18 @@ def run(source=None, parameters=None):
         copyCustomData(objN, obj)
         objsN.append(objN)
 
+    # Delete object from database
+    if qRemoveOriginal:
+        for obj in objs:
+            bpy.data.meshes.remove(obj.data, do_unlink=1)
+            #bpy.data.objects.remove(obj, do_unlink=1)
+
     # Deselect all objects
     bpy.ops.object.select_all(action='DESELECT')
     # Delete temp object from database
     if objMod != None:
         bpy.data.meshes.remove(objMod.data, do_unlink=1)
-        bpy.data.objects.remove(objMod, do_unlink=1)
+        #bpy.data.objects.remove(objMod, do_unlink=1)
     # Select new objects
     for objN in objsN:
         objN.select = 1
